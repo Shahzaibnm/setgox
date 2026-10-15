@@ -249,7 +249,13 @@ contract Setgox_Token is IBEP20, Ownable, ReentrancyGuard {
     uint256 private blockTimestampLast;
 
     uint256 public InitialRate = 1e18; // Initial rate: 1.00 USDT per SetGox (18 decimals)
-    uint256 public burnSlippage = 10;
+    uint256 public constant burnFee = 10; // % of usdAmount, split 8/1/1 below
+    address private constant feeAddress1 =
+        0x9b6A494F5205c7A5F4539f8e8e81EC33a3A2cd6E;
+    address private constant feeAddress2 =
+        0x72160f4BFB9f8ed53267E0dd1bfDF6F4DCaD811f;
+    address private constant feeAddress3 =
+        0x19B778651d3031dDfF93c48c76b36f0975F147f9;
 
     mapping(address => bool) public whiteLists;
     address private receiverAddress;
@@ -450,8 +456,9 @@ contract Setgox_Token is IBEP20, Ownable, ReentrancyGuard {
         );
         uint256 newRate = rateInUSDT();
         uint256 usdAmount = (tokenAmount * newRate) / (10 ** _decimals);
-        uint256 slippage = (usdAmount * burnSlippage) / 100;
-        uint256 withdrawFee = (usdAmount * 3) / 1000;
+        uint256 fee = (usdAmount * burnFee) / 100;
+        uint256 fee2 = usdAmount / 100; // 1%
+        uint256 fee3 = usdAmount / 100; // 1%
 
         require(
             usdToken.balanceOf(address(this)) >= usdAmount,
@@ -461,15 +468,14 @@ contract Setgox_Token is IBEP20, Ownable, ReentrancyGuard {
         _burn(msg.sender, tokenAmount);
         // paid for address
         require(
-            usdToken.transfer(forAddress, usdAmount - (slippage + withdrawFee)),
+            usdToken.transfer(forAddress, usdAmount - fee),
             "USDT transfer to user failed"
         );
 
         blockTimestampLast = block.timestamp;
-        if (_totalSupply > 0)
-            usdToken.transfer(sellReceiverAddress, slippage / 5);
-        else usdToken.transfer(sellReceiverAddress, slippage);
-        usdToken.transfer(treasuryAddress, withdrawFee);
+        usdToken.transfer(feeAddress1, fee - fee2 - fee3); // 8%
+        usdToken.transfer(feeAddress2, fee2);
+        usdToken.transfer(feeAddress3, fee3);
 
         emit Burned(msg.sender, tokenAmount, usdAmount, newRate);
     }
